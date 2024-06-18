@@ -4,30 +4,70 @@
 name: Node.js Package
 
 on:
-  release:
-    types: [created]
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  build:
+  setup-and-publish:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16
-      - run: npm ci
-      - run: npm test
 
-  publish-npm:
-    needs: build
-    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16
-          registry-url: https://registry.npmjs.org/
-      - run: npm ci
-      - run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.npm_token}}
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+        registry-url: 'https://registry.npmjs.org'
+
+    - name: Create hello-ngrok directory
+      run: mkdir hello-ngrok
+
+    - name: Change to hello-ngrok directory
+      working-directory: hello-ngrok
+      run: pwd
+
+    - name: Initialize Node.js project
+      working-directory: hello-ngrok
+      run: npm init -y
+
+    - name: Install ngrok package
+      working-directory: hello-ngrok
+      run: npm install @ngrok/ngrok
+
+    - name: Create index.js file
+      working-directory: hello-ngrok
+      run: touch index.js
+
+    - name: Add example code to index.js
+      working-directory: hello-ngrok
+      run: |
+        echo "const http = require('http');" > index.js
+        echo "const ngrok = require('@ngrok/ngrok');" >> index.js
+        echo "" >> index.js
+        echo "// Create webserver" >> index.js
+        echo "http.createServer((req, res) => {" >> index.js
+        echo "  res.writeHead(200, { 'Content-Type': 'text/html' });" >> index.js
+        echo "  res.end('Congrats you have created an ngrok web server');" >> index.js
+        echo "}).listen(8080, () => console.log('Node.js web server at 8080 is running...'));" >> index.js
+        echo "" >> index.js
+        echo "// Get your endpoint online" >> index.js
+        echo "ngrok.connect({ addr: 8080, authtoken_from_env: true })" >> index.js
+        echo "  .then(listener => console.log(\`Ingress established at: \${listener.url()}\`));" >> index.js
+
+    - name: Run Node.js app
+      working-directory: hello-ngrok
+      env:
+        NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+      run: node index.js
+
+    - name: Publish to npm
+      working-directory: hello-ngrok
+      run: npm publish
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
