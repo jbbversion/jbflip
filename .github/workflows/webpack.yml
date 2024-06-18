@@ -1,38 +1,83 @@
-name: NodeJS with Webpack
+name: Node.js Package with Webpack
 
 on:
   push:
-    branches: [ "master" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "master" ]
+    branches:
+      - main
 
 jobs:
-  build:
+  build-and-publish:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [14.x, 16.x, 18.x]
-
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-    - name: Use Node.js ${{ matrix.node-version }}
+    - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: '16'
+        registry-url: 'https://registry.npmjs.org'
 
-    - name: Build
+    - name: Create hello-ngrok directory
+      run: mkdir hello-ngrok
+
+    - name: Change to hello-ngrok directory
+      working-directory: hello-ngrok
+      run: pwd
+
+    - name: Initialize Node.js project
+      working-directory: hello-ngrok
+      run: npm init -y
+
+    - name: Install dependencies
+      working-directory: hello-ngrok
+      run: npm install @ngrok/ngrok webpack webpack-cli --save-dev
+
+    - name: Create index.js file
+      working-directory: hello-ngrok
       run: |
-        mkdir hello-ngrok
-        cd hello-ngrok
-        npm init -y
-        npm install @ngrok/ngrok
+        echo "const http = require('http');" > index.js
+        echo "const ngrok = require('@ngrok/ngrok');" >> index.js
+        echo "" >> index.js
+        echo "// Create webserver" >> index.js
+        echo "http.createServer((req, res) => {" >> index.js
+        echo "  res.writeHead(200, { 'Content-Type': 'text/html' });" >> index.js
+        echo "  res.end('Congrats you have created an ngrok web server');" >> index.js
+        echo "}).listen(8080, () => console.log('Node.js web server at 8080 is running...'));" >> index.js
+        echo "" >> index.js
+        echo "// Get your endpoint online" >> index.js
+        echo "ngrok.connect({ addr: 8080, authtoken_from_env: true })" >> index.js
+        echo "  .then(listener => console.log(\`Ingress established at: \${listener.url()}\`));" >> index.js
 
-         
+    - name: Create webpack config file
+      working-directory: hello-ngrok
+      run: |
+        echo "const path = require('path');" > webpack.config.js
+        echo "module.exports = {" >> webpack.config.js
+        echo "  entry: './index.js'," >> webpack.config.js
+        echo "  output: {" >> webpack.config.js
+        echo "    filename: 'bundle.js'," >> webpack.config.js
+        echo "    path: path.resolve(__dirname, 'dist')" >> webpack.config.js
+        echo "  }," >> webpack.config.js
+        echo "  mode: 'development'" >> webpack.config.js
+        echo "};" >> webpack.config.js
 
+    - name: Build with Webpack
+      working-directory: hello-ngrok
+      run: npm run build
 
+    - name: Run Node.js app
+      working-directory: hello-ngrok
+      env:
+        NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+      run: node dist/bundle.js
 
-
-
-
+    - name: Publish to npm
+      working-directory: hello-ngrok
+      run: npm publish
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
